@@ -147,13 +147,15 @@ initializeHistory();
 autoSolverSetup();
 
 // Run off-design, increase power by increasing voltage drop (decrease voltage on output side of cable).
-ACS.Vreal *= 0.9999;
+ACS.Vreal *= 0.99;
 ACS.Vimag /= 0.9;
 
 // Transient data out to a CSV file for plotting
 OutFileStream transientCSVStream { filename = "output/T_transient.csv"; } 
 
 // Write the CSV headers
+transientCSVStream << "R,";
+transientCSVStream << "R_Corrected,";
 transientCSVStream << "Q_heat,";
 transientCSVStream << "HeatTransferRate,";
 transientCSVStream << "MassTemp,";
@@ -164,15 +166,19 @@ transientCSVStream << "time" << endl;
 int printCounter = 0;
 void csvTransientPrint()
 {
+    transientCSVStream << ACCable.R << ", ";
+    transientCSVStream << ACCable.R_Corrected << ", ";
     transientCSVStream << ACCable.Q_heat << ", ";
     transientCSVStream << TMS.Q_O.HeatTransferRate << ", ";
     transientCSVStream << TMS.Q_O.MassTemp-458.67 << ", ";
-    transientCSVStream << CASE << ", ";
+    transientCSVStream << CASE++ << ", ";
     transientCSVStream << time << endl;
 
     if (++printCounter >= 100)
     {
       printCounter = 0;
+        cout << "R, "  << ACCable.R << ", ";
+        cout << "R_Corrected, "  << ACCable.R_Corrected << ", ";
         cout << "CablePowerDissipated (BTU/s), "  << ACCable.Q_heat << ", ";
         cout << "HeatTransferRate (BTU/s), "  << TMS.Q_O.HeatTransferRate << ", ";
         cout << "MassTemp (deg F), "          << TMS.Q_O.MassTemp-458.67 << ", ";
@@ -184,7 +190,7 @@ void csvTransientPrint()
 postsolverSequence = { "csvTransientPrint" };
 
 
-
+CASE = 0;
 //cout << "CASE #" << CASE++ << " -- increased power" << endl;
 run();
 //cout << "AC R+jX = " << ACCable.R << "+j" << ACCable.L*(2*PI*ACCable.EP_I.frequency);
@@ -206,7 +212,7 @@ run();
 
 
 // Run back to the original operating point.
-ACS.Vreal /= 0.9999;
+ACS.Vreal /= 0.99;
 ACS.Vimag *= 0.9;
 transient.stopTime = 30;
 run();

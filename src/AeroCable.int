@@ -95,6 +95,21 @@ current information is updated in the cable's input and output ports.";
   // ****** SETUP VARIABLES ******
   //------------------------------
   
+  real alpha {
+    value = 0.00429; // Cu temperature coefficient [1/(deg C)]
+    description = "Conductor temperature coefficient for resistance calculation";
+  }
+  
+  real R_Corrected {
+    value = 0.01; 
+    description = "Cable resistance corrected for current temperature";
+  }
+
+  real T_0 {
+    value = 20; // Deg celsius
+    description = "Baseline conductor temperature";
+  }
+
   real R {
     value = .01;  IOstatus = "input";  units = "ohm";
   }
@@ -122,12 +137,12 @@ current information is updated in the cable's input and output ports.";
     value = 0; IOstatus = "output"; units = "Btu/sec"; // [BTUs / sec]
     description = "Power dissipation at current time.";
   }
-
+  
   Mass {
     value = 1; IOstatus = "output"; units = "kg"; // [kilograms]
     description = "Mass output of the cable.";
   }
-  
+   
   real SpecificAmperage {
     value = 170; IOstatus = "input"; units = "none"; // [A * m / kg]
     description = "Amps to weight/length ratio for the cable.";
@@ -654,7 +669,15 @@ current information is updated in the cable's input and output ports.";
   //-----------------------------------------------
   // ****** PERFORM ENGINEERING CALCULATIONS ******
   //-----------------------------------------------
-  
+  void temperature_resistance_calculation()
+  {
+      //Change R based on temperature change; Rankine to Celsius conversion
+      real R_TO_C_OFFSET = -491.67; //(1°R − 491.67) × 5/9 = -272.6°
+      real R_TO_C_SCALE = 5./9.;
+      R_Corrected = R + R * alpha * (((S_eThermMass.T + R_TO_C_OFFSET) * R_TO_C_SCALE)  - T_0);
+  }
+
+
   void calculate() {
     
     // get frequency from input port, propagate through to output port.
@@ -674,10 +697,17 @@ current information is updated in the cable's input and output ports.";
       }
       
       I.setrj(Ireal, Iimag);
+      // by default use the nominal resistance of this cable.
       Z.setrj(R, L * (2*PI * EP_I.frequency));
+      // but if we have a thermal subelement, then update the resistance based on current temperature.
+      if ( (switchThermPort == "TRUE") && (!S_eThermMass.isEmpty()) ) {
+        temperature_resistance_calculation();
+        Z.setrj(R_Corrected, L * (2*PI * EP_I.frequency));
+      }
       
       // calculate voltage drop = dV = IZ
       dV.copy("I");
+
       dV.times("Z");
     } else { // off-design
         
@@ -686,8 +716,14 @@ current information is updated in the cable's input and output ports.";
       dV.minus("EP_O.VLN");
     
       // calculate current from voltage drop
-      Z.setrj(R,  L * (2*PI*EP_I.frequency));
-      
+      // by default use the nominal resistance of this cable.
+      Z.setrj(R, L * (2*PI * EP_I.frequency));
+      // but if we have a thermal subelement, then update the resistance based on current temperature.
+      if ( (switchThermPort == "TRUE") && (!S_eThermMass.isEmpty()) ) {
+        temperature_resistance_calculation();
+        Z.setrj(R_Corrected, L * (2*PI * EP_I.frequency)); 
+      }
+
       I.copy("dV");
       I.div("Z");
     }
